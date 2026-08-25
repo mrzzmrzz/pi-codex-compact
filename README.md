@@ -109,19 +109,27 @@ compaction, so each compaction costs roughly two LLM calls.
 
 ```bash
 npm run smoke      # offline: imports and key algorithms
-npm run test:live  # end-to-end against real pi + real OpenAI auth
+npm run test:live  # end-to-end against a real pi CLI + real OpenAI backend
 ```
 
-Override the live-test model with `PI_CODEX_COMPACT_TEST_MODEL=openai-codex/gpt-5.6-sol`.
+The live test drives real `pi --mode rpc` sessions through compaction,
+fork, resume, and model-switch scenarios, and asserts that a
+`responses_compaction_v2` artifact was persisted and replayed. It defaults to
+`openai/gpt-5.4-nano`, which requires direct OpenAI API-key auth **and** at
+least one other `openai/gpt-*` model in Pi's model list (used for the
+model-switch scenario).
 
-## 中文简介
+If your Pi is authenticated through ChatGPT/Codex instead (only
+`openai-codex/*` models available), point the test at a Codex model:
 
-这是一个只做一件事的 Pi 扩展：在压缩（compaction）发生时，调用 OpenAI 服务端的
-Responses 压缩协议（即 Codex 使用的协议），并在之后兼容的对话轮次中回放返回的
-加密压缩产物。它同时保留 Pi 本地可读的文本摘要，因此 resume / fork / 树导航 /
-切换模型等 Pi 语义完全不受影响。相比上游项目，本 fork 移除了 WebSocket 传输层
-替换与 `previous_response_id` 续传（含 `store: true`），不再接管 Pi 的传输路径，
-唯一的请求改动是压缩边界之后的历史替换。
+```bash
+PI_CODEX_COMPACT_TEST_MODEL=openai-codex/gpt-5.4-mini npm run test:live
+```
+
+Any `openai-codex/*` model works as long as a second `openai-codex/gpt-*`
+model exists to switch to. One scenario (reduced-plaintext replay) only
+applies to direct `openai/*` models and is skipped on Codex models; both
+model families exercise the same replacement-history replay code path.
 
 ## Repo layout
 

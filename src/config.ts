@@ -1,8 +1,9 @@
 /**
- * Configuration loading for the extension.
+ * Configuration loading.
  *
- * Reads global/project JSON config files plus environment overrides and exposes
- * a normalized, fully-populated runtime config object.
+ * Two options: `enabled` and `notify`. Read from global/project JSON files and
+ * environment overrides, cached per working directory for the process lifetime
+ * (`/reload` re-initializes extensions and picks up changes).
  */
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -11,12 +12,8 @@ import { join } from "node:path";
 export type JsonRecord = Record<string, unknown>;
 
 export type ExtensionConfig = {
-  enabled?: boolean;
-  includeAzure?: boolean;
-  compactThreshold?: number;
-  thresholdRatio?: number;
-  notify?: boolean;
-  usePreviousResponseId?: boolean;
+  enabled: boolean;
+  notify: boolean;
 };
 
 export function isRecord(value: unknown): value is JsonRecord {
@@ -43,51 +40,26 @@ function toBoolean(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function toPositiveNumber(value: unknown): number | undefined {
-  if (typeof value === "number" && Number.isFinite(value) && value > 0) return value;
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-  }
-  return undefined;
-}
+const configByCwd = new Map<string, ExtensionConfig>();
 
-export function loadConfig(cwd: string): Required<ExtensionConfig> {
-  const globalPath = join(homedir(), ".pi", "agent", "openai-server-compaction.json");
-  const projectPath = join(cwd, ".pi", "openai-server-compaction.json");
-  const globalCfg = readJsonFile(globalPath) ?? {};
-  const projectCfg = readJsonFile(projectPath) ?? {};
+export function loadConfig(cwd: string): ExtensionConfig {
+  const cached = configByCwd.get(cwd);
+  if (cached) return cached;
+
+  const globalCfg = readJsonFile(join(homedir(), ".pi", "agent", "codex-compact.json")) ?? {};
+  const projectCfg = readJsonFile(join(cwd, ".pi", "codex-compact.json")) ?? {};
   const merged = { ...globalCfg, ...projectCfg };
 
-  return {
+  const config: ExtensionConfig = {
     enabled:
-      toBoolean(process.env.PI_OPENAI_SERVER_COMPACTION_ENABLED) ??
+      toBoolean(process.env.PI_CODEX_COMPACT_ENABLED) ??
       toBoolean(merged.enabled) ??
       true,
-    includeAzure:
-      toBoolean(process.env.PI_OPENAI_SERVER_COMPACTION_AZURE) ??
-      toBoolean(merged.includeAzure) ??
-      false,
-    compactThreshold:
-      toPositiveNumber(process.env.PI_OPENAI_SERVER_COMPACTION_THRESHOLD) ??
-      toPositiveNumber(merged.compactThreshold) ??
-      0,
-    thresholdRatio:
-      toPositiveNumber(process.env.PI_OPENAI_SERVER_COMPACTION_RATIO) ??
-      toPositiveNumber(merged.thresholdRatio) ??
-      0.7,
     notify:
-      toBoolean(process.env.PI_OPENAI_SERVER_COMPACTION_NOTIFY) ??
+      toBoolean(process.env.PI_CODEX_COMPACT_NOTIFY) ??
       toBoolean(merged.notify) ??
-      false,
-    usePreviousResponseId:
-      toBoolean(process.env.PI_OPENAI_SERVER_COMPACTION_PREVIOUS_RESPONSE_ID) ??
-      toBoolean(merged.usePreviousResponseId) ??
       true,
   };
-}
-
-export function toPositiveInteger(value: unknown): number | undefined {
-  const numeric = toPositiveNumber(value);
-  return numeric ? Math.floor(numeric) : undefined;
+  configByCwd.set(cwd, config);
+  return config;
 }

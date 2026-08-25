@@ -85,9 +85,9 @@ const RETAINED_MESSAGE_TOKEN_BUDGET = 20_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export type RemoteCompactionDetails = {
-  version: 1 | 2;
-  provider: "openai-responses-compact" | "openai-responses-compaction";
-  implementation?: "responses_compact_v1" | "responses_compaction_v2";
+  version: 2;
+  provider: "openai-responses-compaction";
+  implementation: "responses_compaction_v2";
   modelKey: string;
   replacementHistory: ResponseItem[];
   usage?: RemoteCompactionUsageSnapshot;
@@ -170,13 +170,6 @@ export function buildCodexIdentityHeaders(sessionId?: string): Record<string, st
     "x-codex-installation-id": resolveCodexInstallationId(),
     "x-codex-window-id": `${sessionId}:0`,
     session_id: sessionId,
-  };
-}
-
-export function buildCodexWebSocketHeaders(sessionId: string): Record<string, string> {
-  return {
-    "x-client-request-id": sessionId,
-    ...buildCodexIdentityHeaders(sessionId),
   };
 }
 
@@ -587,18 +580,6 @@ function isRealUserMessage(item: ResponseItem): boolean {
   return Array.isArray(item.content) && item.content.length > 0;
 }
 
-function shouldKeepCompactedHistoryItem(item: ResponseItem): boolean {
-  if (item.type === "message" && item.role === "developer") return false;
-  if (item.type === "message" && item.role === "user") return isRealUserMessage(item);
-  if (item.type === "message" && item.role === "assistant") return true;
-  if (item.type === "compaction" || item.type === "compaction_summary") return true;
-  return false;
-}
-
-export function processCompactedHistory(items: ResponseItem[]): ResponseItem[] {
-  return items.filter(shouldKeepCompactedHistoryItem).map(cloneResponseItem);
-}
-
 function responseMessageText(item: ResponseItem): string {
   if (item.type !== "message" || !Array.isArray(item.content)) return "";
   return item.content
@@ -989,9 +970,7 @@ export function extractRemoteCompactionDetails(details: unknown):
 
   const remote = isRecord(details.remoteCompaction) ? details.remoteCompaction : details;
   if (!isRecord(remote)) return undefined;
-  const isLegacy = remote.provider === "openai-responses-compact" && remote.version === 1;
-  const isV2 = remote.provider === "openai-responses-compaction" && remote.version === 2;
-  if (!isLegacy && !isV2) return undefined;
+  if (remote.provider !== "openai-responses-compaction" || remote.version !== 2) return undefined;
   if (!Array.isArray(remote.replacementHistory)) return undefined;
 
   const replacementHistory = remote.replacementHistory.filter(isResponseItem);
@@ -1000,9 +979,9 @@ export function extractRemoteCompactionDetails(details: unknown):
   const usage = parseRemoteCompactionUsageSnapshot(remote.usage);
 
   return {
-    version: isV2 ? 2 : 1,
-    provider: isV2 ? "openai-responses-compaction" : "openai-responses-compact",
-    implementation: isV2 ? "responses_compaction_v2" : "responses_compact_v1",
+    version: 2,
+    provider: "openai-responses-compaction",
+    implementation: "responses_compaction_v2",
     modelKey: typeof remote.modelKey === "string" ? remote.modelKey : "",
     replacementHistory,
     ...(usage ? { usage } : {}),

@@ -95,7 +95,6 @@ const { default: extensionFactory } = await import(pathToFileURL(join(repoRoot, 
 assert.equal(typeof extensionFactory, "function", "extension entrypoint should export a function");
 
 const {
-  buildCodexWebSocketHeaders,
   buildRemoteCompactionHeaders,
   buildRemoteCompactionDetails,
   buildRemoteCompactionRequestBody,
@@ -103,13 +102,9 @@ const {
   extractRemoteCompactionDetails,
   normalizeResponseItemsForPrompt,
   parseRemoteCompactionV2Events,
-  processCompactedHistory,
   reconstructRemoteCompactionStateFromBranch,
   remoteCompactionV2EndpointUrl,
-} = await import(pathToFileURL(join(repoRoot, "src", "remote-compaction.ts")).href);
-const {
-  selectInputItemsForContinuation,
-} = await import(pathToFileURL(join(repoRoot, "src", "openai-ws-stream.ts")).href);
+} = await import(pathToFileURL(join(repoRoot, "src", "compaction.ts")).href);
 
 const targetModelKey = "openai:openai-responses:gpt-5.4-nano";
 const reconstructed = reconstructRemoteCompactionStateFromBranch({
@@ -119,8 +114,9 @@ const reconstructed = reconstructRemoteCompactionStateFromBranch({
       id: "cmp-1",
       details: {
         remoteCompaction: {
-          version: 1,
-          provider: "openai-responses-compact",
+          version: 2,
+          provider: "openai-responses-compaction",
+          implementation: "responses_compaction_v2",
           modelKey: targetModelKey,
           replacementHistory: [
             {
@@ -282,18 +278,6 @@ assert.deepEqual(normalizedPromptItems[2], {
 assert.equal(normalizedPromptItems[3].result, "");
 assert.doesNotMatch(JSON.stringify(normalizedPromptItems), /orphan|ghost_snapshot/);
 
-const compactedHistory = processCompactedHistory([
-  { type: "message", role: "developer", content: [{ type: "input_text", text: "drop developer" }] },
-  { type: "message", role: "user", content: [] },
-  { type: "message", role: "user", content: [{ type: "input_text", text: "keep user" }] },
-  { type: "message", role: "assistant", content: [{ type: "output_text", text: "keep assistant" }] },
-  { type: "function_call", name: "read", call_id: "call-2", arguments: "{}" },
-  { type: "compaction", encrypted_content: "keep" },
-]);
-assert.deepEqual(compactedHistory.map((item) => item.type), ["message", "message", "compaction"]);
-assert.equal(compactedHistory[0].role, "user");
-assert.equal(compactedHistory[1].role, "assistant");
-
 const compactionHeaders = buildRemoteCompactionHeaders({
   model: {
     provider: "openai",
@@ -311,11 +295,6 @@ assert.match(compactionHeaders["x-codex-installation-id"], /^[0-9a-f-]{36}$/);
 assert.equal(compactionHeaders["x-extra"], "yes");
 assert.equal(compactionHeaders["x-codex-beta-features"], "remote_compaction_v2");
 assert.equal(compactionHeaders.accept, "text/event-stream");
-
-const websocketHeaders = buildCodexWebSocketHeaders("session-123");
-assert.equal(websocketHeaders["x-client-request-id"], "session-123");
-assert.equal(websocketHeaders.session_id, "session-123");
-assert.equal(websocketHeaders["x-codex-window-id"], "session-123:0");
 
 const detailsRoundTrip = extractRemoteCompactionDetails({
   remoteCompaction: buildRemoteCompactionDetails(
@@ -338,36 +317,5 @@ const detailsRoundTrip = extractRemoteCompactionDetails({
 assert.ok(detailsRoundTrip, "expected remote compaction details round trip");
 assert.equal(detailsRoundTrip.usage?.cacheWrite, 40);
 assert.equal(detailsRoundTrip.usage?.cost.total, 10);
-
-const incrementalInput = selectInputItemsForContinuation({
-  context: {
-    messages: [
-      {
-        role: "user",
-        content: [{ type: "text", text: "old user" }],
-      },
-      {
-        role: "assistant",
-        content: [{ type: "text", text: "old assistant" }],
-      },
-      {
-        role: "user",
-        content: [{ type: "text", text: "new user" }],
-      },
-    ],
-  },
-  model: { input: ["text"] },
-  session: { lastContextLength: 2 },
-  currentModelKey: targetModelKey,
-  remoteCompactionState: undefined,
-  previousResponseId: "resp_123",
-});
-assert.deepEqual(incrementalInput, [
-  {
-    type: "message",
-    role: "user",
-    content: "new user",
-  },
-]);
 
 console.log("smoke ok");

@@ -43,7 +43,7 @@ type ModelInfo = JsonObject & {
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const extensionPath = join(repoRoot, "src", "index.ts");
-const primaryModel = process.env.PI_OPENAI_SERVER_COMPACTION_TEST_MODEL ?? "openai/gpt-5.4-nano";
+const primaryModel = process.env.PI_CODEX_COMPACT_TEST_MODEL ?? "openai/gpt-5.4-nano";
 const primaryModelProvider = primaryModel.includes("/") ? primaryModel.split("/")[0] ?? "openai" : "openai";
 const primaryModelId = primaryModel.includes("/") ? primaryModel.split("/").at(-1) ?? primaryModel : primaryModel;
 const defaultRequestTimeoutMs = 120_000;
@@ -169,7 +169,7 @@ class PiRpcClient {
 
   constructor(sessionDir: string, sessionFile?: string, cwd?: string) {
     const env = { ...process.env };
-    env.PI_OPENAI_SERVER_COMPACTION_NOTIFY ??= "0";
+    env.PI_CODEX_COMPACT_NOTIFY ??= "0";
 
     const args = [
       "--mode",

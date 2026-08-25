@@ -1,17 +1,17 @@
 {
-  "name": "pi-openai-server-compaction",
-  "version": "0.1.0",
+  "name": "pi-codex-compact",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Pi extension for OpenAI server-side compaction with Codex-quality continuity.",
+  "description": "Pi extension: Codex-style server-side compaction for OpenAI Responses models.",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/algal/pi-openai-server-compaction.git"
+    "url": "git+https://github.com/mrzzmrzz/pi-codex-compact.git"
   },
-  "homepage": "https://github.com/algal/pi-openai-server-compaction#readme",
+  "homepage": "https://github.com/mrzzmrzz/pi-codex-compact#readme",
   "bugs": {
-    "url": "https://github.com/algal/pi-openai-server-compaction/issues"
+    "url": "https://github.com/mrzzmrzz/pi-codex-compact/issues"
   },
   "keywords": [
     "pi-package",
@@ -29,8 +29,6 @@
     "tests",
     "README.md",
     "ARCHITECTURE.md",
-    "TESTPLAN.md",
-    "VALIDATION.md",
     "CHANGELOG.md",
     "LICENSE.md"
   ],
@@ -38,9 +36,9 @@
     "extensions": ["./src/index.ts"]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.80.9 <0.81.0",
-    "@earendil-works/pi-ai": ">=0.80.9 <0.81.0",
-    "@earendil-works/pi-agent-core": ">=0.80.9 <0.81.0"
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-agent-core": "*"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": { "optional": true },
@@ -53,15 +51,11 @@
     "test": "npm run typecheck && npm run smoke",
     "test:live": "node --experimental-strip-types ./tests/live/openai-compaction-rpc-live.ts"
   },
-  "dependencies": {
-    "ws": "^8.18.0"
-  },
   "devDependencies": {
     "@earendil-works/pi-agent-core": "0.80.9",
     "@earendil-works/pi-ai": "0.80.9",
     "@earendil-works/pi-coding-agent": "0.80.9",
     "@types/node": "^24.10.0",
-    "@types/ws": "^8.18.1",
     "typescript": "^5.9.3"
   }
 }

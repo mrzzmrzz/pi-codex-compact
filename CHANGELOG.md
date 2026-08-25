@@ -1,34 +1,45 @@
 # Changelog
 
-This changelog intentionally starts at **0.1.0**.
+## 0.2.0 - 2026-08-25
 
-## Unreleased
-- target Pi 0.80.9 and the `@earendil-works/*` package namespace
-- align compaction fallback, Responses payload normalization, Codex identity headers, and WebSocket behavior with Pi 0.80.9
-- replace the legacy `/responses/compact` call with Codex's current Responses compaction v2 protocol
-- stream a normal Responses request with a trailing `compaction_trigger` and persist the returned `compaction` item
-- retain recent user messages with the same 20K-token budget shape used by Codex while continuing to read legacy version 1 session artifacts
-- add a reproducible native-vs-text compaction benchmark, retained GPT-5.6 Sol evidence, and a standalone report
-- add a fixed-context, information-density-calibrated product-defaults benchmark comparing Pi's real default compactor with the extension's real native replay policy
-- correct the earlier benchmark's same-budget interpretation: its text cap was selected after observing native output usage
+Focused fork of
+[algal/pi-openai-server-compaction](https://github.com/algal/pi-openai-server-compaction),
+renamed to **pi-codex-compact**. The extension now does one thing: Codex-style
+server-side compaction plus replay of the returned history.
 
-During local development on 2026-04-09, the project used temporary internal version bumps while features, tests, docs, and packaging were being assembled. Those local-only bumps were collapsed before the first public push so the repository does not imply a longer tracked public release history than it actually has.
+Removed:
 
-## 0.1.0 - 2026-04-09
-- initial public release
-- added hybrid Codex-style remote compaction for direct OpenAI Responses models
-- added OpenAI `POST /v1/responses/compact` integration
-- persisted opaque replacement history in Pi compaction details
-- reconstructed remote compaction state across resume/reload/tree navigation
-- added WS-backed continuation and conservative `previous_response_id` reuse
-- tightened direct OpenAI continuation so unchanged request shapes send only incremental post-turn deltas instead of replaying full input alongside `previous_response_id`
-- fixed reconstructed post-compaction remote replay to exclude turns completed by other models after later resume/tree reconstruction
-- kept portable Pi text summaries as the readable fallback and non-OpenAI portability path
-- hardened cross-model runtime state handling and remote output validation
-- mirrored observed Responses `reasoning` and `text` tuning into remote compaction requests when available, with thinking-level fallback for reasoning
-- fixed the direct OpenAI WS path to carry reasoning configuration and encrypted-reasoning inclusion like Pi's normal HTTP Responses path
-- persisted remote compaction usage metadata when the backend returns it
-- added a reduced-plaintext live replay regression with tiny Pi `keepRecentTokens`
-- added a live Pi RPC regression harness in `tests/live/openai-compaction-rpc-live.ts`
-- added a local smoke harness that bootstraps Pi peer-package links and runs small regression checks
-- added `ARCHITECTURE.md`, testing docs, packaging polish, and MIT licensing
+- the WebSocket transport replacement (`openai-ws-stream`, `openai-ws-connection`,
+  `custom-stream`, `stream-message-shared`) and the `registerProvider` override —
+  Pi's own transport is used unchanged, and the `ws` dependency is gone
+- `previous_response_id` live continuation, including the `store: true` and
+  `context_management` request patching that came with it — normal requests are
+  no longer mutated and OpenAI no longer retains them server-side
+- Azure partial support (never live-tested upstream)
+- legacy version 1 (`/responses/compact`) session artifact reading; the
+  persisted version 2 format is unchanged and stays compatible with upstream
+- dead config (`compactThreshold`, `thresholdRatio`, `usePreviousResponseId`,
+  `includeAzure`) — config is now just `enabled` and `notify`
+- the benchmark trees (results remain in the upstream repo, summarized in the
+  README)
+
+Changed:
+
+- direct `openai/*` models replay remote compaction history through the same
+  `before_provider_request` input replacement the Codex path already used,
+  instead of a custom stream
+- config files renamed to `~/.pi/agent/codex-compact.json` and
+  `.pi/codex-compact.json`; env vars renamed to `PI_CODEX_COMPACT_*`; config is
+  cached per process (`/reload` picks up changes)
+- `notify` now defaults to on and fires once per stored compaction; remote
+  compaction failures always warn instead of degrading silently
+- `src/remote-compaction.ts` renamed to `src/compaction.ts`
+- dropped the hard Pi peer-dependency pin (`>=0.80.9 <0.81.0` → `*`);
+  0.80.9 remains the tested baseline via devDependencies
+
+## 0.1.0 - 2026-04-09 (upstream)
+
+Initial public release as `pi-openai-server-compaction` by Alexis Gallagher.
+See the upstream repository for its full history, including the Responses
+compaction v2 protocol work, the live RPC regression harness, and the
+native-vs-text benchmarks.

@@ -23,7 +23,7 @@ Changed:
   the one-off summary call
 - compaction results report `usage` (local summary plus remote compaction), so
   Pi includes compaction cost in session totals
-- dev dependencies pinned to Pi 1.0.0
+- dev dependencies pinned to Pi 1.0.0; Pi 0.86 or later is now required
 
 ## 0.2.0 - 2026-08-25
 

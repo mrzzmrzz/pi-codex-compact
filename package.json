@@ -1,6 +1,6 @@
 {
   "name": "pi-codex-compact",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
   "description": "Pi extension: Codex-style server-side compaction for OpenAI Responses models.",
@@ -52,9 +52,9 @@
     "test:live": "node --experimental-strip-types ./tests/live/openai-compaction-rpc-live.ts"
   },
   "devDependencies": {
-    "@earendil-works/pi-agent-core": "0.80.9",
-    "@earendil-works/pi-ai": "0.80.9",
-    "@earendil-works/pi-coding-agent": "0.80.9",
+    "@earendil-works/pi-agent-core": "1.0.0",
+    "@earendil-works/pi-ai": "1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
     "@types/node": "^24.10.0",
     "typescript": "^5.9.3"
   }

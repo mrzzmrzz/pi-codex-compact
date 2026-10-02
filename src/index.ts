@@ -26,6 +26,7 @@ import {
   buildRemoteCompactionDetails,
   buildToolsPayload,
   callRemoteCompactionEndpoint,
+  combineUsage,
   generateBestEffortLocalSummary,
   messageToResponseItems,
   messagesToResponseItems,
@@ -159,6 +160,8 @@ export default function codexCompactExtension(pi: ExtensionAPI) {
 
     const auth = await ctx.modelRegistry.getApiKeyAndHeaders(model);
     if (!auth.ok || !auth.apiKey) return undefined;
+    // Credential-resolved endpoints (e.g. models.json or login overrides) win over the catalog baseUrl.
+    const requestModel = auth.baseUrl ? { ...model, baseUrl: auth.baseUrl } : model;
 
     const tools = buildToolsPayload(pi.getAllTools(), pi.getActiveTools());
     const sessionId = getSessionId(ctx);
@@ -180,8 +183,10 @@ export default function codexCompactExtension(pi: ExtensionAPI) {
         preparation: event.preparation,
         messages: fullBranchMessages,
         model,
+        runtime: ctx.modelRegistry,
         apiKey: auth.apiKey,
         headers: auth.headers,
+        env: auth.env,
         customInstructions: event.customInstructions,
         signal: event.signal,
         thinkingLevel,
@@ -189,7 +194,7 @@ export default function codexCompactExtension(pi: ExtensionAPI) {
         tokensBefore: event.preparation.tokensBefore,
       }),
       callRemoteCompactionEndpoint({
-        model,
+        model: requestModel,
         apiKey: auth.apiKey,
         headers: auth.headers,
         sessionId,
@@ -237,6 +242,7 @@ export default function codexCompactExtension(pi: ExtensionAPI) {
         summary: localSummary.summary,
         firstKeptEntryId: localSummary.firstKeptEntryId,
         tokensBefore: localSummary.tokensBefore,
+        usage: combineUsage(localSummary.usage, remoteResult.value.usage),
         details: {
           ...(localSummary.details !== undefined ? { localSummaryDetails: localSummary.details } : {}),
           remoteCompaction: remoteDetails,

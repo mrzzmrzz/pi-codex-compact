@@ -99,6 +99,7 @@ const {
   buildRemoteCompactionDetails,
   buildRemoteCompactionRequestBody,
   buildRemoteCompactionV2History,
+  combineUsage,
   extractRemoteCompactionDetails,
   normalizeResponseItemsForPrompt,
   parseRemoteCompactionV2Events,
@@ -295,6 +296,35 @@ assert.match(compactionHeaders["x-codex-installation-id"], /^[0-9a-f-]{36}$/);
 assert.equal(compactionHeaders["x-extra"], "yes");
 assert.equal(compactionHeaders["x-codex-beta-features"], "remote_compaction_v2");
 assert.equal(compactionHeaders.accept, "text/event-stream");
+
+// Pi 1.0 ProviderHeaders: null values are deletion markers and must never be sent.
+const gatewayHeaders = buildRemoteCompactionHeaders({
+  model: {
+    provider: "openai",
+    api: "openai-responses",
+    id: "gpt-5.4-nano",
+  },
+  apiKey: "placeholder",
+  sessionId: "session-123",
+  headers: { Authorization: null, "cf-aig-authorization": "Bearer gateway", "x-codex-beta-features": null },
+});
+assert.equal(gatewayHeaders.authorization, undefined);
+assert.equal(gatewayHeaders.Authorization, undefined);
+assert.equal(gatewayHeaders["cf-aig-authorization"], "Bearer gateway");
+assert.equal(gatewayHeaders["x-codex-beta-features"], "remote_compaction_v2");
+assert.doesNotMatch(JSON.stringify(gatewayHeaders), /null/);
+
+const usagePart = (n) => ({
+  input: n,
+  output: n,
+  cacheRead: n,
+  cacheWrite: n,
+  totalTokens: 4 * n,
+  cost: { input: n, output: n, cacheRead: n, cacheWrite: n, total: 4 * n },
+});
+assert.equal(combineUsage(undefined, undefined), undefined);
+assert.deepEqual(combineUsage(usagePart(1), undefined), usagePart(1));
+assert.deepEqual(combineUsage(usagePart(1), usagePart(2)), usagePart(3));
 
 const detailsRoundTrip = extractRemoteCompactionDetails({
   remoteCompaction: buildRemoteCompactionDetails(

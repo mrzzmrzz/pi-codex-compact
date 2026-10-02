@@ -58,9 +58,10 @@ pi install git:github.com/mrzzmrzz/pi-codex-compact
 ```
 
 Requirements: Node >= 22, Pi, and working auth for a supported OpenAI
-Responses model. Developed and tested against Pi 0.80.9; there is no hard
-version pin, but the extension relies on Pi's extension events and
-`pi-ai/compat` helpers, so a future Pi release could still require an update.
+Responses model. Developed and tested against Pi 1.0.0; there is no hard
+version pin, but the extension relies on Pi's extension events and the
+`ctx.modelRegistry` model runtime, so a future Pi release could still require
+an update. Use 0.2.0 with Pi releases before 0.84.
 
 ## Configuration
 

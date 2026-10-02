@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 - 2026-10-02
+
+Pi 1.0.0 compatibility.
+
+Fixed:
+
+- `null` header-deletion markers from `ModelRegistry.getApiKeyAndHeaders()`
+  (Pi 0.84+ `ProviderHeaders`) are now honored in the remote compaction
+  request instead of being sent as the literal string `"null"`
+- the remote compaction request uses a credential-resolved `baseUrl` when Pi
+  returns one
+- the portable summary now falls back to Pi's built-in summary when the model
+  call ends with an error instead of storing the placeholder text
+
+Changed:
+
+- the portable summary and fallback summary calls go through
+  `ctx.modelRegistry` (`complete` / `streamSimple`) instead of the temporary
+  `@earendil-works/pi-ai/compat` entrypoint, so custom providers, resolved
+  endpoints and auth `env` are preserved, and prompt caching is disabled for
+  the one-off summary call
+- compaction results report `usage` (local summary plus remote compaction), so
+  Pi includes compaction cost in session totals
+- dev dependencies pinned to Pi 1.0.0
+
 ## 0.2.0 - 2026-08-25
 
 Focused fork of

@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { arch, platform, release } from "node:os";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import type { SessionBeforeCompactEvent, ToolInfo } from "@earendil-works/pi-coding-agent";
+import type { ModelRegistry, SessionBeforeCompactEvent, ToolInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentMessage, ThinkingLevel } from "@earendil-works/pi-agent-core";
 import {
   compact,
@@ -20,7 +20,6 @@ import {
   type CompactionResult,
 } from "@earendil-works/pi-coding-agent";
 import { calculateCost, type Model, type Usage } from "@earendil-works/pi-ai";
-import { complete } from "@earendil-works/pi-ai/compat";
 import { isRecord } from "./config.ts";
 import {
   hostnameFromBaseUrl,
@@ -78,6 +77,15 @@ export type ResponsesReasoningConfig = {
 export type ResponsesTextConfig = Record<string, unknown>;
 
 export type RemoteCompactionUsageSnapshot = Usage;
+
+/**
+ * Request headers as resolved by Pi's model registry. A `null` value is a
+ * deletion marker: the header must not be sent, even if set by a default.
+ */
+export type ProviderHeadersLike = Record<string, string | null>;
+
+/** The parts of Pi's model runtime used for nested summary calls. */
+export type SummaryModelRuntime = Pick<ModelRegistry, "complete" | "streamSimple">;
 
 const IMAGE_CONTENT_OMITTED_PLACEHOLDER = "image content omitted because you do not support image input";
 const REMOTE_COMPACTION_V2_FEATURE = "remote_compaction_v2";
@@ -207,17 +215,33 @@ function withRemoteCompactionV2Feature(headers: Record<string, string>): Record<
   };
 }
 
+function applyProviderHeaders(
+  base: Record<string, string>,
+  overrides: ProviderHeadersLike | undefined,
+): Record<string, string> {
+  const result = { ...base };
+  for (const [name, value] of Object.entries(overrides ?? {})) {
+    const lower = name.toLowerCase();
+    for (const existing of Object.keys(result)) {
+      if (existing.toLowerCase() === lower) delete result[existing];
+    }
+    if (typeof value === "string") result[name] = value;
+  }
+  return result;
+}
+
 export function buildRemoteCompactionHeaders(params: {
   model: Model<any>;
   apiKey: string;
-  headers?: Record<string, string>;
+  headers?: ProviderHeadersLike;
   sessionId?: string;
 }): Record<string, string> {
   const codexIdentityHeaders = buildCodexIdentityHeaders(params.sessionId);
   const commonHeaders = withRemoteCompactionV2Feature({
-    authorization: `Bearer ${params.apiKey}`,
-    ...codexIdentityHeaders,
-    ...(params.headers ?? {}),
+    ...applyProviderHeaders(
+      { authorization: `Bearer ${params.apiKey}`, ...codexIdentityHeaders },
+      params.headers,
+    ),
     accept: "text/event-stream",
     "content-type": "application/json",
   });
@@ -661,15 +685,14 @@ export function buildToolsPayload(
 export async function generatePortableSummary(params: {
   messages: AgentMessage[];
   model: Model<any>;
-  apiKey: string;
-  headers?: Record<string, string>;
+  runtime: SummaryModelRuntime;
   customInstructions?: string;
   signal?: AbortSignal;
   firstKeptEntryId: string;
   tokensBefore: number;
 }): Promise<CompactionResult> {
   const conversation = serializeConversation(convertToLlm(params.messages));
-  const response = await complete(
+  const response = await params.runtime.complete(
     params.model,
     {
       messages: [
@@ -681,12 +704,15 @@ export async function generatePortableSummary(params: {
       ],
     },
     {
-      apiKey: params.apiKey,
-      headers: params.headers,
       maxTokens: 4096,
       signal: params.signal,
+      cacheRetention: "none",
+      sessionId: randomUUID(),
     },
   );
+  if (response.stopReason === "error" || response.stopReason === "aborted") {
+    throw new Error(response.errorMessage ?? `Portable summary ${response.stopReason}`);
+  }
 
   const summary = response.content
     .filter((item): item is { type: "text"; text: string } => item.type === "text")
@@ -698,6 +724,7 @@ export async function generatePortableSummary(params: {
     summary: summary || buildCompactionSummaryText(params.model),
     firstKeptEntryId: params.firstKeptEntryId,
     tokensBefore: params.tokensBefore,
+    usage: response.usage,
   };
 }
 
@@ -705,8 +732,10 @@ export async function generateBestEffortLocalSummary(params: {
   preparation: CompactionPreparation;
   messages: AgentMessage[];
   model: Model<any>;
-  apiKey: string;
-  headers?: Record<string, string>;
+  runtime: SummaryModelRuntime;
+  apiKey: string | undefined;
+  headers?: ProviderHeadersLike;
+  env?: Record<string, string>;
   customInstructions?: string;
   signal?: AbortSignal;
   thinkingLevel?: ThinkingLevel;
@@ -720,12 +749,36 @@ export async function generateBestEffortLocalSummary(params: {
       params.preparation,
       params.model,
       params.apiKey,
-      params.headers,
+      // Pi forwards null deletion markers unchanged; compact()'s signature predates ProviderHeaders.
+      params.headers as Record<string, string> | undefined,
       params.customInstructions,
       params.signal,
       params.thinkingLevel,
+      (model, context, options) => params.runtime.streamSimple(model, context, options),
+      params.env,
     );
   }
+}
+
+/** Sums usage from the local summary and remote compaction calls for Pi's cost accounting. */
+export function combineUsage(...parts: Array<Usage | undefined>): Usage | undefined {
+  const present = parts.filter((part): part is Usage => part !== undefined);
+  if (present.length === 0) return undefined;
+  if (present.length === 1) return present[0];
+  return present.reduce((total, part) => ({
+    input: total.input + part.input,
+    output: total.output + part.output,
+    cacheRead: total.cacheRead + part.cacheRead,
+    cacheWrite: total.cacheWrite + part.cacheWrite,
+    totalTokens: total.totalTokens + part.totalTokens,
+    cost: {
+      input: total.cost.input + part.cost.input,
+      output: total.cost.output + part.cost.output,
+      cacheRead: total.cost.cacheRead + part.cost.cacheRead,
+      cacheWrite: total.cost.cacheWrite + part.cost.cacheWrite,
+      total: total.cost.total + part.cost.total,
+    },
+  }));
 }
 
 function extractCacheWriteTokens(value: unknown): number {
@@ -900,7 +953,7 @@ export function parseRemoteCompactionV2Events(events: unknown[]): RemoteCompacti
 export async function callRemoteCompactionEndpoint(params: {
   model: Model<any>;
   apiKey: string;
-  headers?: Record<string, string>;
+  headers?: ProviderHeadersLike;
   sessionId?: string;
   input: ResponseItem[];
   instructions?: string;
@@ -1002,7 +1055,7 @@ function assistantMessageMatchesModelKey(
 ): boolean {
   const target = parseModelKeyParts(targetModelKey);
   if (!target) return false;
-  if (!isRecord(message)) return false;
+  if (message.role !== "assistant") return false;
   return message.provider === target.provider && message.model === target.id;
 }
 

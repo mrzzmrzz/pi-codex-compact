@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- dev dependencies pinned to Pi 1.0.4; typecheck and smoke tests pass on it
+  with no code changes
+
 ## 0.3.0 - 2026-10-02
 
 Pi 1.0.0 compatibility.
